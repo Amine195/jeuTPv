@@ -1,0 +1,1 @@
+javac *.java JeuGenerique\*.java InterfaceGenerique\*.java InterfacesSpecifiques\IUTetris\*.java InterfacesSpecifiques\IUSerpent\*.java InterfacesSpecifiques\IUPacMan\*.java MoteurGenerique\*.java MoteursSpecifiques\JeuTetris\*.java MoteursSpecifiques\JeuSerpent\*.java MoteursSpecifiques\JeuPacMan\*.java PersistScore/*.java Utils/Son/*.java 
