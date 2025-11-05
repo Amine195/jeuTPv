@@ -18,6 +18,17 @@ La boucle s'appuie sur plusieurs composants répartis dans différents modules d
 - **`PersistScore`** : via `Persistance` et les classes de gestion des classements, permet l'enregistrement des scores en fin de partie.
 - **`Utils.Son`** : fournit `EffetSonore`, utilisé par le moteur générique pour jouer les sons clés comme la fin de partie.
 
+## Analyse statistique : répartition des LOC
+
+Faute de pouvoir installer `cloc` dans l'environnement d'exécution (dépôts APT et PyPI inaccessibles), la mesure des lignes de code a été réalisée avec le script `outils/compter_loc.py`. Ce script reproduit un comptage inspiré de `cloc` : seules les lignes non vides sont retenues, et les commentaires (`//`, blocs `/* ... */`) sont exclus du total.
+
+| Partie | Dossiers / fichiers inclus | LOC (approx.) |
+| --- | --- | --- |
+| **Générique** | `JeuGenerique`, `MoteurGenerique`, `InterfaceGenerique`, `PersistScore`, `Utils/Son` | 606 |
+| **Spécifique Tetris** | `MoteursSpecifiques/JeuTetris`, `InterfacesSpecifiques/IUTetris/TetrisCanvas.java`, `Tetris.java` | 358 |
+
+Les résultats détaillés par fichier confirment que la base générique (infrastructure d'interface, moteur, persistance et services transverses) représente environ 63 % des lignes de code, tandis que l'implémentation propre à Tetris en couvre 37 %. Cela illustre l'efficacité de la séparation entre moteur générique et logique métier spécifique : l'ajout d'un nouveau jeu se concentre sur un volume de code bien plus restreint que la fondation réutilisable. 【F:outils/compter_loc.py†L1-L98】【8d5f3c†L1-L28】
+
 ## Couches architecturales
 
 La structuration du code peut être interprétée selon quatre couches principales, chacune regroupant un ensemble cohérent de paquets :
