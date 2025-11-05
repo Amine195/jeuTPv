@@ -39,6 +39,15 @@ Le même script calcule la taille moyenne des classes et des méthodes, ainsi qu
 | Partie | Classes | Moy. LOC / classe | Méthodes | Moy. LOC / méthode | Classes abstraites |
 | --- | --- | --- | --- | --- | --- |
 | **Générique** | 18 | 28,5 | 66 | 6,8 | 6 (33,3 %) |
+Les résultats détaillés par fichier confirment que la base générique (infrastructure d'interface, moteur, persistance et services transverses) représente environ 63 % des lignes de code, tandis que l'implémentation propre à Tetris en couvre 37 %. Cela illustre l'efficacité de la séparation entre moteur générique et logique métier spécifique : l'ajout d'un nouveau jeu se concentre sur un volume de code bien plus restreint que la fondation réutilisable. 【F:outils/compter_loc.py†L1-L344】【b0d410†L1-L31】
+
+## Analyse statistique : tailles moyennes et ratios
+
+Le même script calcule la taille moyenne des classes et des méthodes, ainsi que la proportion de classes abstraites. Ces métriques fournissent un aperçu de la granularité du code et de l'utilisation de l'abstraction dans chaque portion du projet. 【F:outils/compter_loc.py†L272-L344】
+
+| Partie | Classes | Moy. LOC / classe | Méthodes | Moy. LOC / méthode | Classes abstraites |
+| --- | --- | --- | --- | --- | --- |
+| **Générique** | 12 | 37,7 | 62 | 6,8 | 2 (16,7 %) |
 | **Spécifique Tetris** | 6 | 55,5 | 39 | 8,0 | 0 |
 
 ### Autres informations pertinentes
@@ -82,6 +91,13 @@ Le script `outils/compter_loc.py` implémente désormais le même calcul que JDe
 | `MoteursSpecifiques.JeuTetris` | 4 | 0 | 2 | 1 | 0,00 | 0,33 | 0,67 | 1 | Non |
 | `PersistScore` | 5 | 1 | 4 | 0 | 0,17 | 0,00 | 0,83 | 1 | Non |
 | `Utils.Son` | 1 | 0 | 2 | 0 | 0,00 | 0,00 | 1,00 | 1 | Non |
+- **Classe la plus volumineuse** : `MoteurGenerique.Moteur` rassemble 75 LOC contre 156 LOC pour `MoteursSpecifiques.JeuTetris.MoteurTetris`, ce qui confirme que la logique métier spécifique porte la complexité la plus importante côté Tetris. 【b0d410†L32-L47】
+- **Méthode la plus volumineuse** : le constructeur `InterfaceGenerique.PanneauControle.PanneauControle` s'étend sur 67 LOC, loin devant la méthode spécifique la plus longue (`MoteurTetris.chercherLignePleine`, 19 LOC). Cela traduit la forte densité de configuration de l'interface utilisateur dans la partie générique. 【b0d410†L32-L47】
+
+### Commentaire
+
+La base générique compte davantage de classes (12 contre 6) mais chacune reste plus compacte, avec une moyenne de 6,8 LOC par méthode, ce qui reflète des responsabilités mieux découpées pour orchestrer l'interface et la boucle de jeu. À l'inverse, les classes spécifiques sont moins nombreuses mais plus longues (55,5 LOC par classe, 8 LOC par méthode), signe que la logique Tetris regroupe davantage de règles métier par classe. L'absence de classes abstraites dans la portion spécifique souligne que l'extension passe essentiellement par l'implémentation concrète de l'API exposée par le moteur générique, tandis que ce dernier conserve 16,7 % de classes abstraites pour structurer les points d'extension et les contrats partagés. 【b0d410†L32-L47】
+Les résultats détaillés par fichier confirment que la base générique (infrastructure d'interface, moteur, persistance et services transverses) représente environ 63 % des lignes de code, tandis que l'implémentation propre à Tetris en couvre 37 %. Cela illustre l'efficacité de la séparation entre moteur générique et logique métier spécifique : l'ajout d'un nouveau jeu se concentre sur un volume de code bien plus restreint que la fondation réutilisable. 【F:outils/compter_loc.py†L1-L98】【8d5f3c†L1-L28】
 
 ## Couches architecturales
 

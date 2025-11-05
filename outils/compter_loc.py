@@ -14,6 +14,13 @@ import re
 from pathlib import Path
 from statistics import mean
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from dataclasses import dataclass
+import re
+from pathlib import Path
+from statistics import mean
+from typing import Iterable, List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Iterable, List, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -115,6 +122,7 @@ def extraire_classes(lignes: Sequence[str], fichier: Path) -> List[ClasseStat]:
     while i < longueur:
         ligne = lignes[i]
         if "class" not in ligne and "interface" not in ligne and "enum" not in ligne:
+        if "class" not in ligne:
             i += 1
             continue
         signature = ligne
@@ -123,6 +131,7 @@ def extraire_classes(lignes: Sequence[str], fichier: Path) -> List[ClasseStat]:
             i += 1
             signature += " " + lignes[i]
         if "{" not in signature or not re.search(r"\b(class|interface|enum)\b", signature):
+        if "{" not in signature or "class" not in signature:
             i += 1
             continue
         if re.search(r"\bnew\s+\w+\s*\(", signature):
@@ -139,6 +148,12 @@ def extraire_classes(lignes: Sequence[str], fichier: Path) -> List[ClasseStat]:
         mot_clef = correspondance_nom.group(1)
         est_interface = mot_clef == "interface"
         abstraite = est_interface or bool(re.search(r"\babstract\s+class\b", signature))
+        correspondance_nom = re.search(r"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)", signature)
+        if not correspondance_nom:
+            i += 1
+            continue
+        nom = correspondance_nom.group(1)
+        abstraite = bool(re.search(r"\babstract\s+class\b", signature))
         compte_accolades = signature.count("{") - signature.count("}")
         fin = i
         while compte_accolades > 0 and fin + 1 < longueur:
@@ -345,6 +360,7 @@ def analyser_racines(racines: Sequence[Path]) -> RésultatAnalyse:
         méthodes=méthodes,
         packages=packages,
     )
+    return RésultatAnalyse(total_loc=total, détails=détails, classes=classes, méthodes=méthodes)
 
 
 def iterer_fichiers(racines: Iterable[Path]) -> Iterable[Path]:
@@ -523,6 +539,14 @@ def afficher_metriques_packages(titre: str, métriques: Sequence[PackageMetrics]
             )
         )
     print()
+def compter_loc(racines: Sequence[Path]) -> Tuple[int, List[EntréeLOC]]:
+    total = 0
+    détails: List[EntréeLOC] = []
+    for fichier in sorted(iterer_fichiers(racines)):
+        loc = compter_loc_fichier(fichier)
+        total += loc
+        détails.append(EntréeLOC(fichier, loc))
+    return total, détails
 
 
 if __name__ == "__main__":
@@ -559,3 +583,17 @@ if __name__ == "__main__":
         calculer_metriques_packages(analyse_combinée.packages),
     )
 
+    total_générique, détails_génériques = compter_loc(génériques)
+    total_spécifique, détails_spécifiques = compter_loc(spécifiques)
+
+    def afficher(titre: str, total: int, détails: Sequence[EntréeLOC]) -> None:
+        print(titre)
+        print("=" * len(titre))
+        print(f"Total LOC : {total}")
+        for entrée in détails:
+            chemin_rel = entrée.chemin.relative_to(racine_projet)
+            print(f"  - {chemin_rel}: {entrée.loc}")
+        print()
+
+    afficher("Partie générique", total_générique, détails_génériques)
+    afficher("Partie spécifique", total_spécifique, détails_spécifiques)
