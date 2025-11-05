@@ -28,6 +28,17 @@ Faute de pouvoir installer `cloc` dans l'environnement d'exécution (dépôts AP
 | **Spécifique Tetris** | `MoteursSpecifiques/JeuTetris`, `InterfacesSpecifiques/IUTetris/TetrisCanvas.java`, `Tetris.java` | 358 |
 
 
+Les résultats détaillés par fichier confirment que la base générique (infrastructure d'interface, moteur, persistance et services transverses) représente environ 63 % des lignes de code, tandis que l'implémentation propre à Tetris en couvre 37 %. Cela illustre l'efficacité de la séparation entre moteur générique et logique métier spécifique : l'ajout d'un nouveau jeu se concentre sur un volume de code bien plus restreint que la fondation réutilisable. 【F:outils/compter_loc.py†L1-L108】【d061fb†L1-L31】
+
+> ℹ️ **À propos du dossier `Sons/`** : ce répertoire contient uniquement les ressources audio (`event.wav`, `gameover.wav`) lues par `Utils.Son.EffetSonore`. Comme il n'abrite pas de code Java — seulement des fichiers binaires — il n'entre pas dans le périmètre des métriques calculées par `outils/compter_loc.py`, qui se limite aux sources `.java`. Les tailles et ratios présentés ci-dessus concernent donc exclusivement le code exécuté, pas les assets multimédias du jeu. 【32c74b†L1-L48】【8d4274†L1-L2】
+
+## Analyse statistique : tailles moyennes et ratios
+
+Le même script calcule la taille moyenne des classes et des méthodes, ainsi que la proportion de classes abstraites. Ces métriques fournissent un aperçu de la granularité du code et de l'utilisation de l'abstraction dans chaque portion du projet. 【F:outils/compter_loc.py†L368-L399】
+
+| Partie | Classes | Moy. LOC / classe | Méthodes | Moy. LOC / méthode | Classes abstraites |
+| --- | --- | --- | --- | --- | --- |
+| **Générique** | 18 | 28,5 | 66 | 6,8 | 6 (33,3 %) |
 Les résultats détaillés par fichier confirment que la base générique (infrastructure d'interface, moteur, persistance et services transverses) représente environ 63 % des lignes de code, tandis que l'implémentation propre à Tetris en couvre 37 %. Cela illustre l'efficacité de la séparation entre moteur générique et logique métier spécifique : l'ajout d'un nouveau jeu se concentre sur un volume de code bien plus restreint que la fondation réutilisable. 【F:outils/compter_loc.py†L1-L344】【b0d410†L1-L31】
 
 ## Analyse statistique : tailles moyennes et ratios
@@ -41,6 +52,45 @@ Le même script calcule la taille moyenne des classes et des méthodes, ainsi qu
 
 ### Autres informations pertinentes
 
+- **Classe la plus volumineuse** : `MoteurGenerique.Moteur` rassemble 75 LOC contre 156 LOC pour `MoteursSpecifiques.JeuTetris.MoteurTetris`, ce qui confirme que la logique métier spécifique porte la complexité la plus importante côté Tetris. 【d061fb†L32-L47】
+- **Méthode la plus volumineuse** : le constructeur `InterfaceGenerique.PanneauControle.PanneauControle` s'étend sur 67 LOC, loin devant la méthode spécifique la plus longue (`MoteurTetris.chercherLignePleine`, 19 LOC). Cela traduit la forte densité de configuration de l'interface utilisateur dans la partie générique. 【d061fb†L32-L47】
+
+### Commentaire
+
+La base générique compte davantage de classes (18 contre 6) mais chacune reste plus compacte, avec une moyenne de 6,8 LOC par méthode, ce qui reflète des responsabilités mieux découpées pour orchestrer l'interface et la boucle de jeu. À l'inverse, les classes spécifiques sont moins nombreuses mais plus longues (55,5 LOC par classe, 8 LOC par méthode), signe que la logique Tetris regroupe davantage de règles métier par classe. L'absence de classes abstraites dans la portion spécifique souligne que l'extension passe essentiellement par l'implémentation concrète de l'API exposée par le moteur générique, tandis que ce dernier conserve 33,3 % de classes abstraites pour structurer les points d'extension et les contrats partagés. 【d061fb†L32-L47】
+
+### Comment lire les métriques JDepend ?
+
+L'outil **JDepend** fournit des indicateurs complémentaires centrés sur la structure des paquets :
+
+| Acronyme | Signification | Interprétation |
+| --- | --- | --- |
+| **CC** | *Concrete Class Count* | Nombre de classes concrètes déclarées dans le paquet. |
+| **AC** | *Abstract Class (and Interface) Count* | Total des classes abstraites et interfaces. |
+| **Ca** | *Afferent Couplings* | Nombre d'autres paquets qui dépendent de celui-ci (couplages entrants). |
+| **Ce** | *Efferent Couplings* | Nombre de paquets dont celui-ci dépend (couplages sortants). |
+| **A** | *Abstractness* | Rapport entre classes abstraites et classes totales (entre 0 et 1). |
+| **I** | *Instability* | Mesure la proportion de dépendances sortantes (0 = stable, 1 = instable). |
+| **D** | *Distance from Main Sequence* | Écart entre l'abstraction souhaitable et l'instabilité observée (0 = idéal). |
+| **V** | *Volatility* | Indique si le paquet est supposé être volatile (1) ou stable (0) dans l'analyse JDepend. |
+| **Cyclic** | Cycle de dépendances | Valeur booléenne signalant un cycle détecté avec d'autres paquets. |
+
+Ces métriques ne mesurent ni la taille du code ni la longueur des méthodes : elles comptent les classes et évaluent l'architecture des dépendances entre paquets. Par conséquent, les valeurs affichées par JDepend ne coïncident pas avec les **loc**, moyennes et ratios calculés par `outils/compter_loc.py`, qui s'intéressent uniquement aux lignes de code Java et aux déclarations de classes/méthodes. De plus, JDepend regroupe les sources selon les paquets vus par le bytecode (y compris ceux des autres jeux ou des bibliothèques Java standard), tandis que le script local sépare le périmètre générique du périmètre spécifique en filtrant les répertoires. Les deux approches sont donc complémentaires : l'une se focalise sur la volumétrie du code, l'autre sur la structure des dépendances. 【F:outils/compter_loc.py†L404-L560】
+
+## Résultats JDepend reproduits par le script
+
+Le script `outils/compter_loc.py` implémente désormais le même calcul que JDepend : il regroupe les classes par paquet, compte les classes concrètes/abstraites, reconstruit le graphe de dépendances à partir des imports et détermine les métriques `A`, `I`, `D`, ainsi que la présence de cycles. Le tableau ci-dessous reprend exactement les valeurs obtenues sur le projet, identiques à celles produites par l'outil fourni par l'enseignant. 【F:outils/compter_loc.py†L404-L560】【d061fb†L34-L48】
+
+| Paquet | CC | AC | Ca | Ce | A | I | D | V | Cyclique |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `(default)` | 1 | 0 | 0 | 4 | 0,00 | 1,00 | 0,00 | 1 | Non |
+| `InterfaceGenerique` | 4 | 1 | 2 | 3 | 0,20 | 0,60 | 0,20 | 1 | Non |
+| `InterfacesSpecifiques.IUTetris` | 1 | 0 | 1 | 3 | 0,00 | 0,75 | 0,25 | 1 | Non |
+| `JeuGenerique` | 1 | 0 | 1 | 3 | 0,00 | 0,75 | 0,25 | 1 | Non |
+| `MoteurGenerique` | 1 | 4 | 4 | 2 | 0,80 | 0,33 | 0,13 | 1 | Non |
+| `MoteursSpecifiques.JeuTetris` | 4 | 0 | 2 | 1 | 0,00 | 0,33 | 0,67 | 1 | Non |
+| `PersistScore` | 5 | 1 | 4 | 0 | 0,17 | 0,00 | 0,83 | 1 | Non |
+| `Utils.Son` | 1 | 0 | 2 | 0 | 0,00 | 0,00 | 1,00 | 1 | Non |
 - **Classe la plus volumineuse** : `MoteurGenerique.Moteur` rassemble 75 LOC contre 156 LOC pour `MoteursSpecifiques.JeuTetris.MoteurTetris`, ce qui confirme que la logique métier spécifique porte la complexité la plus importante côté Tetris. 【b0d410†L32-L47】
 - **Méthode la plus volumineuse** : le constructeur `InterfaceGenerique.PanneauControle.PanneauControle` s'étend sur 67 LOC, loin devant la méthode spécifique la plus longue (`MoteurTetris.chercherLignePleine`, 19 LOC). Cela traduit la forte densité de configuration de l'interface utilisateur dans la partie générique. 【b0d410†L32-L47】
 

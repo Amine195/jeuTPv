@@ -9,6 +9,11 @@ Ce script est utilisé lorsque l'installation de cloc n'est pas possible dans l'
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+import re
+from pathlib import Path
+from statistics import mean
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from dataclasses import dataclass
 import re
 from pathlib import Path
@@ -30,6 +35,7 @@ class ClasseStat:
     nom: str
     loc: int
     abstraite: bool
+    est_interface: bool
     ligne_début: int
     ligne_fin: int
 
@@ -115,6 +121,7 @@ def extraire_classes(lignes: Sequence[str], fichier: Path) -> List[ClasseStat]:
     longueur = len(lignes)
     while i < longueur:
         ligne = lignes[i]
+        if "class" not in ligne and "interface" not in ligne and "enum" not in ligne:
         if "class" not in ligne:
             i += 1
             continue
@@ -123,12 +130,24 @@ def extraire_classes(lignes: Sequence[str], fichier: Path) -> List[ClasseStat]:
         while "{" not in signature and i + 1 < longueur:
             i += 1
             signature += " " + lignes[i]
+        if "{" not in signature or not re.search(r"\b(class|interface|enum)\b", signature):
         if "{" not in signature or "class" not in signature:
             i += 1
             continue
         if re.search(r"\bnew\s+\w+\s*\(", signature):
             i += 1
             continue
+        correspondance_nom = re.search(
+            r"\b(class|interface|enum)\s+([A-Za-z_][A-Za-z0-9_]*)",
+            signature,
+        )
+        if not correspondance_nom:
+            i += 1
+            continue
+        nom = correspondance_nom.group(2)
+        mot_clef = correspondance_nom.group(1)
+        est_interface = mot_clef == "interface"
+        abstraite = est_interface or bool(re.search(r"\babstract\s+class\b", signature))
         correspondance_nom = re.search(r"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)", signature)
         if not correspondance_nom:
             i += 1
@@ -148,6 +167,7 @@ def extraire_classes(lignes: Sequence[str], fichier: Path) -> List[ClasseStat]:
                 nom=nom,
                 loc=loc,
                 abstraite=abstraite,
+                est_interface=est_interface,
                 ligne_début=début + 1,
                 ligne_fin=fin + 1,
             )
@@ -255,6 +275,62 @@ class RésultatAnalyse:
     détails: List[EntréeLOC]
     classes: List[ClasseStat]
     méthodes: List[MéthodeStat]
+    packages: List["PackageBrut"]
+
+
+@dataclass
+class PackageBrut:
+    nom: str
+    classes: List[ClasseStat] = field(default_factory=list)
+    dépendances: Set[str] = field(default_factory=set)
+
+
+@dataclass(frozen=True)
+class PackageMetrics:
+    nom: str
+    cc: int
+    ac: int
+    ca: int
+    ce: int
+    abstractness: float
+    instability: float
+    distance: float
+    volatility: int
+    cyclic: bool
+
+
+def extraire_nom_package(lignes: Sequence[str]) -> str:
+    for ligne in lignes:
+        stripped = ligne.strip()
+        if stripped.startswith("package "):
+            contenu = stripped[len("package ") :].strip()
+            return contenu.rstrip(";")
+        if stripped and not stripped.startswith("import"):
+            break
+    return "(default)"
+
+
+def extraire_imports(lignes: Sequence[str]) -> Set[str]:
+    imports: Set[str] = set()
+    for ligne in lignes:
+        stripped = ligne.strip()
+        if not stripped.startswith("import "):
+            continue
+        contenu = stripped[len("import ") :].strip()
+        if contenu.startswith("static "):
+            contenu = contenu[len("static ") :].strip()
+        if not contenu:
+            continue
+        contenu = contenu.rstrip(";")
+        if contenu.endswith(".*"):
+            paquet = contenu[: -2]
+        else:
+            if "." not in contenu:
+                continue
+            paquet = contenu.rsplit(".", 1)[0]
+        if paquet:
+            imports.add(paquet)
+    return imports
 
 
 def analyser_racines(racines: Sequence[Path]) -> RésultatAnalyse:
@@ -262,6 +338,7 @@ def analyser_racines(racines: Sequence[Path]) -> RésultatAnalyse:
     détails: List[EntréeLOC] = []
     classes: List[ClasseStat] = []
     méthodes: List[MéthodeStat] = []
+    packages_temp: Dict[str, PackageBrut] = {}
     fichiers = sorted(iterer_fichiers(racines))
     for fichier in fichiers:
         loc = compter_loc_fichier(fichier)
@@ -271,6 +348,18 @@ def analyser_racines(racines: Sequence[Path]) -> RésultatAnalyse:
         classes_fichier = extraire_classes(lignes, fichier)
         classes.extend(classes_fichier)
         méthodes.extend(extraire_méthodes(lignes, classes_fichier, fichier))
+        nom_package = extraire_nom_package(lignes)
+        info = packages_temp.setdefault(nom_package, PackageBrut(nom_package))
+        info.classes.extend(classes_fichier)
+        info.dépendances.update(extraire_imports(lignes))
+    packages = list(packages_temp.values())
+    return RésultatAnalyse(
+        total_loc=total,
+        détails=détails,
+        classes=classes,
+        méthodes=méthodes,
+        packages=packages,
+    )
     return RésultatAnalyse(total_loc=total, détails=détails, classes=classes, méthodes=méthodes)
 
 
@@ -326,6 +415,130 @@ def afficher_metriques_structurales(titre: str, analyse: RésultatAnalyse) -> No
             f"({plus_grande_méthode.loc} LOC)"
         )
     print()
+
+
+def _filtrer_dépendances(packages: Sequence[PackageBrut]) -> Dict[str, Set[str]]:
+    noms = {pkg.nom for pkg in packages}
+    dépendances_filtrées: Dict[str, Set[str]] = {}
+    for pkg in packages:
+        dépendances_filtrées[pkg.nom] = {
+            dep for dep in pkg.dépendances if dep in noms and dep != pkg.nom
+        }
+    return dépendances_filtrées
+
+
+def _détecter_paquets_cycliques(dépendances: Dict[str, Set[str]]) -> Set[str]:
+    index = 0
+    indices: Dict[str, int] = {}
+    lowlink: Dict[str, int] = {}
+    pile: List[str] = []
+    sur_pile: Set[str] = set()
+    cycliques: Set[str] = set()
+
+    def strongconnect(nom: str) -> None:
+        nonlocal index
+        indices[nom] = index
+        lowlink[nom] = index
+        index += 1
+        pile.append(nom)
+        sur_pile.add(nom)
+
+        for successeur in dépendances.get(nom, set()):
+            if successeur not in indices:
+                strongconnect(successeur)
+                lowlink[nom] = min(lowlink[nom], lowlink[successeur])
+            elif successeur in sur_pile:
+                lowlink[nom] = min(lowlink[nom], indices[successeur])
+
+        if lowlink[nom] == indices[nom]:
+            composante: List[str] = []
+            while True:
+                sommet = pile.pop()
+                sur_pile.remove(sommet)
+                composante.append(sommet)
+                if sommet == nom:
+                    break
+            if len(composante) > 1:
+                cycliques.update(composante)
+            else:
+                successeurs = dépendances.get(nom, set())
+                if nom in successeurs:
+                    cycliques.add(nom)
+
+    for nom in dépendances:
+        if nom not in indices:
+            strongconnect(nom)
+
+    return cycliques
+
+
+def calculer_metriques_packages(packages: Sequence[PackageBrut]) -> List[PackageMetrics]:
+    dépendances = _filtrer_dépendances(packages)
+    ca_temp: Dict[str, Set[str]] = {pkg.nom: set() for pkg in packages}
+    for source, deps in dépendances.items():
+        for destination in deps:
+            ca_temp[destination].add(source)
+    cycliques = _détecter_paquets_cycliques(dépendances)
+    métriques: List[PackageMetrics] = []
+    for pkg in packages:
+        cc = sum(1 for cls in pkg.classes if not cls.abstraite)
+        ac = sum(1 for cls in pkg.classes if cls.abstraite)
+        total_classes = cc + ac
+        abstractness = ac / total_classes if total_classes else 0.0
+        ce = len(dépendances.get(pkg.nom, set()))
+        ca = len(ca_temp.get(pkg.nom, set()))
+        if ca + ce:
+            instability = ce / (ca + ce)
+        else:
+            instability = 0.0
+        distance = abs(abstractness + instability - 1)
+        métriques.append(
+            PackageMetrics(
+                nom=pkg.nom,
+                cc=cc,
+                ac=ac,
+                ca=ca,
+                ce=ce,
+                abstractness=abstractness,
+                instability=instability,
+                distance=distance,
+                volatility=1,
+                cyclic=pkg.nom in cycliques,
+            )
+        )
+    return sorted(métriques, key=lambda metric: metric.nom)
+
+
+def afficher_metriques_packages(titre: str, métriques: Sequence[PackageMetrics]) -> None:
+    if not métriques:
+        print(f"{titre}\n{'-' * len(titre)}")
+        print("Aucun paquet détecté\n")
+        return
+    en_tête = (
+        "{:<45} {:>3} {:>3} {:>3} {:>3} {:>6} {:>6} {:>6} {:>3} {:>6}".format(
+            "Paquet", "CC", "AC", "Ca", "Ce", "A", "I", "D", "V", "Cyclic"
+        )
+    )
+    print(titre)
+    print("-" * len(titre))
+    print(en_tête)
+    print("-" * len(en_tête))
+    for métrique in métriques:
+        print(
+            "{:<45} {:>3} {:>3} {:>3} {:>3} {:>6.2f} {:>6.2f} {:>6.2f} {:>3} {:>6}".format(
+                métrique.nom,
+                métrique.cc,
+                métrique.ac,
+                métrique.ca,
+                métrique.ce,
+                métrique.abstractness,
+                métrique.instability,
+                métrique.distance,
+                métrique.volatility,
+                "Oui" if métrique.cyclic else "Non",
+            )
+        )
+    print()
 def compter_loc(racines: Sequence[Path]) -> Tuple[int, List[EntréeLOC]]:
     total = 0
     détails: List[EntréeLOC] = []
@@ -362,6 +575,12 @@ if __name__ == "__main__":
     )
     afficher_metriques_structurales(
         "Métriques structurelles (spécifique)", analyse_spécifique
+    )
+
+    analyse_combinée = analyser_racines(génériques + spécifiques)
+    afficher_metriques_packages(
+        "Métriques de type JDepend (ensemble du projet)",
+        calculer_metriques_packages(analyse_combinée.packages),
     )
 
     total_générique, détails_génériques = compter_loc(génériques)
