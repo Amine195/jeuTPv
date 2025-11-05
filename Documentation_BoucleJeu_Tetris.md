@@ -47,6 +47,7 @@ Le même script calcule la taille moyenne des classes et des méthodes, ainsi qu
 ### Commentaire
 
 La base générique compte davantage de classes (12 contre 6) mais chacune reste plus compacte, avec une moyenne de 6,8 LOC par méthode, ce qui reflète des responsabilités mieux découpées pour orchestrer l'interface et la boucle de jeu. À l'inverse, les classes spécifiques sont moins nombreuses mais plus longues (55,5 LOC par classe, 8 LOC par méthode), signe que la logique Tetris regroupe davantage de règles métier par classe. L'absence de classes abstraites dans la portion spécifique souligne que l'extension passe essentiellement par l'implémentation concrète de l'API exposée par le moteur générique, tandis que ce dernier conserve 16,7 % de classes abstraites pour structurer les points d'extension et les contrats partagés. 【b0d410†L32-L47】
+Les résultats détaillés par fichier confirment que la base générique (infrastructure d'interface, moteur, persistance et services transverses) représente environ 63 % des lignes de code, tandis que l'implémentation propre à Tetris en couvre 37 %. Cela illustre l'efficacité de la séparation entre moteur générique et logique métier spécifique : l'ajout d'un nouveau jeu se concentre sur un volume de code bien plus restreint que la fondation réutilisable. 【F:outils/compter_loc.py†L1-L98】【8d5f3c†L1-L28】
 
 ## Couches architecturales
 

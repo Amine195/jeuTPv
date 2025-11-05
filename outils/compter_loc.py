@@ -14,6 +14,8 @@ import re
 from pathlib import Path
 from statistics import mean
 from typing import Iterable, List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Iterable, List, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -324,6 +326,14 @@ def afficher_metriques_structurales(titre: str, analyse: RésultatAnalyse) -> No
             f"({plus_grande_méthode.loc} LOC)"
         )
     print()
+def compter_loc(racines: Sequence[Path]) -> Tuple[int, List[EntréeLOC]]:
+    total = 0
+    détails: List[EntréeLOC] = []
+    for fichier in sorted(iterer_fichiers(racines)):
+        loc = compter_loc_fichier(fichier)
+        total += loc
+        détails.append(EntréeLOC(fichier, loc))
+    return total, détails
 
 
 if __name__ == "__main__":
@@ -354,3 +364,17 @@ if __name__ == "__main__":
         "Métriques structurelles (spécifique)", analyse_spécifique
     )
 
+    total_générique, détails_génériques = compter_loc(génériques)
+    total_spécifique, détails_spécifiques = compter_loc(spécifiques)
+
+    def afficher(titre: str, total: int, détails: Sequence[EntréeLOC]) -> None:
+        print(titre)
+        print("=" * len(titre))
+        print(f"Total LOC : {total}")
+        for entrée in détails:
+            chemin_rel = entrée.chemin.relative_to(racine_projet)
+            print(f"  - {chemin_rel}: {entrée.loc}")
+        print()
+
+    afficher("Partie générique", total_générique, détails_génériques)
+    afficher("Partie spécifique", total_spécifique, détails_spécifiques)
